@@ -60,6 +60,7 @@ function loadState() {
   return s;
 }
 const PARENT_PIN = '8345';
+const KID_PIN = { nastya: '9999' }; // пароль на вход в профиль ребёнка (у кого нет — вход свободный)
 const DEV = (() => { let d = null; try { d = localStorage.getItem('slovarik_dev'); if (!d) { d = 'd' + Math.random().toString(36).slice(2, 10); localStorage.setItem('slovarik_dev', d); } } catch (e) { d = 'nodev'; } return d; })();
 let S = loadState();
 let saveTimer = null;
@@ -302,7 +303,7 @@ function renderHome() {
   const cards = ['nastya', 'andrey'].map(id => {
     const p = S.profiles[id], g = goalState(p);
     return `<div class="card profile ${id}" data-pid="${id}">
-      <div class="ava">${p.avatar}</div><h2>${esc(p.name)}</h2>
+      <div class="ava">${p.avatar}</div><h2>${esc(p.name)}${KID_PIN[id] ? ' <span title="Вход по паролю" style="font-size:.7em">🔒</span>' : ''}</h2>
       <div class="muted">${p.grade} класс · уровень ${level(p.xp)} · 🔥 ${streak(p)}</div>
       <div style="margin:14px 0 6px" class="bar ${g.done ? 'okc' : ''}"><i style="width:${g.pct}%"></i></div>
       <div class="small muted">Сегодня: ${g.min} из ${p.set.goalMin} мин · ${g.ses} из ${p.set.goalSessions} трен. ${g.done ? '✅' : ''}</div>
@@ -314,8 +315,8 @@ function renderHome() {
     <div class="profiles">${cards}</div>
     <div class="center"><button class="btn ghost" id="toParent">👨‍👩‍👧 Для родителей</button></div>
     <div class="small center" id="syncSt" style="margin-top:14px">${syncText()}</div>`;
-  app.querySelectorAll('[data-pid]').forEach(el => el.onclick = () => go('kid', { pid: el.dataset.pid }));
-  document.getElementById('toParent').onclick = () => go('pin');
+  app.querySelectorAll('[data-pid]').forEach(el => el.onclick = () => { const id = el.dataset.pid; KID_PIN[id] ? go('pin', { pinFor: id }) : go('kid', { pid: id }); });
+  document.getElementById('toParent').onclick = () => go('pin', { pinFor: null });
 }
 
 /* ---------- главная ребёнка ---------- */
@@ -1108,10 +1109,12 @@ function renderAwards() {
 
 /* ---------- родители ---------- */
 function renderPin() {
+  const kid = cur.pinFor ? S.profiles[cur.pinFor] : null;
   cur.pid = null; setTheme();
+  if (kid) document.body.className = 't-' + kid.id;
   app.innerHTML = `<div class="ex center"><div class="card" style="padding:28px">
-    <h2>👨‍👩‍👧 Раздел для родителей</h2>
-    <p class="muted">Введите PIN-код</p>
+    <h2>${kid ? `${kid.avatar} Вход: ${esc(kid.name)}` : '👨‍👩‍👧 Раздел для родителей'}</h2>
+    <p class="muted">${kid ? 'Введи свой пароль' : 'Введите PIN-код'}</p>
     <div class="pin">${[0, 1, 2, 3].map(i => `<input type="password" inputmode="numeric" maxlength="1" data-i="${i}">`).join('')}</div>
     <div id="pinMsg" class="small status-bad" style="min-height:1.2em"></div>
     <button class="btn ghost" id="bk">⬅️ Назад</button></div></div>`;
@@ -1122,8 +1125,9 @@ function renderPin() {
   });
   function submit() {
     const v = ins.map(x => x.value).join('');
-    if (v === PARENT_PIN) { go('parent'); syncAll(); }
-    else { document.getElementById('pinMsg').textContent = 'Неверный PIN'; ins.forEach(x => x.value = ''); ins[0].focus(); }
+    if (kid) { if (v === KID_PIN[kid.id]) return go('kid', { pid: kid.id, pinFor: null }); }
+    else if (v === PARENT_PIN) { go('parent'); syncAll(); return; }
+    document.getElementById('pinMsg').textContent = kid ? 'Неверный пароль' : 'Неверный PIN'; ins.forEach(x => x.value = ''); ins[0].focus();
   }
   document.getElementById('bk').onclick = () => go('home');
 }
