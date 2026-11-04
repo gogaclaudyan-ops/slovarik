@@ -357,10 +357,11 @@ function renderKid() {
     ${tile('gTiles', '🧩', 'Собери слово', 'Из букв — по-английски')}
     ${tile('gListen', '🎧', 'Слушай и выбирай', 'Тренируем слух')}
     ${tile('gWrite', '⌨️', 'Напиши перевод', 'С русского на английский')}
-    ${tile('gMistakes', '🩹', 'Работа над ошибками', 'Слова, в которых ошибался')}
+    ${tile('gMistakes', '🩹', 'Работа над ошибками', 'Английские слова, в которых ошибался')}
   </div>
   <div class="section-title">Игры по русскому</div>
   <div class="menu">
+    ${(() => { const n = ruFixPool(p).length; return tile('rFix', '🩹', 'Работа над ошибками', n ? `${n} ${plural(n, 'слово', 'слова', 'слов')} с ошибками — разбор и проверка` : 'Ошибок нет — молодец!', n > 0); })()}
     ${tile('rGaps', '🔤', 'Вставь букву', 'Ловим трудные места')}
     ${tile('rChoice', '🕵️', 'Найди верное слово', 'Где написано правильно?')}
     ${tile('rPhoto', '📸', 'Фото-диктант', 'Запомни слово и напиши')}
@@ -397,11 +398,12 @@ function kidAction(a) {
   if (a === 'gListen') return game('en', canSpeak('en') ? 'listen' : 'choiceEnRu', 'Слушай и выбирай');
   if (a === 'gWrite') return game('en', 'typeRuEn', 'Напиши перевод');
   if (a === 'gMistakes') {
-    const items = [...deckOf(p, 'en'), ...deckOf(p, 'ru')].filter(x => p.cards[x.id] && p.cards[x.id].bad > 0)
+    const items = deckOf(p, 'en').filter(x => p.cards[x.id] && p.cards[x.id].bad > 0)
       .sort((a, b) => (p.cards[b.id].bad / (p.cards[b.id].ok + 1)) - (p.cards[a.id].bad / (p.cards[a.id].ok + 1))).slice(0, 12);
     if (!items.length) return toast('Ошибок пока нет — так держать! 💪');
-    return startSession(shuffle(items).map(x => ({ type: taskTypeFor(p, x), id: x.id })), { title: 'Работа над ошибками', subj: 'mix', game: true });
+    return startSession(shuffle(items).map(x => ({ type: taskTypeFor(p, x), id: x.id })), { title: 'Работа над ошибками', subj: 'en', game: true });
   }
+  if (a === 'rFix') return startRuFix();
   if (a === 'rGaps') return game('ru', 'ruGaps', 'Вставь букву', 10, x => x.t === 'l');
   if (a === 'rChoice') return game('ru', 'ruChoice', 'Найди верное слово', 10, x => x.t === 'l');
   if (a === 'rPhoto') return game('ru', 'ruPhoto', 'Фото-диктант', 8, x => x.t === 'l');
@@ -483,7 +485,7 @@ function grade(id, correct, opts = {}) {
   const p = P(), c = touch(card(p, id)), d = dayRec(p);
   sess.answered++;
   if (correct) {
-    sess.ok++; d.ok++; c.ok++;
+    sess.ok++; d.ok++; c.ok++; c.st = (c.st || 0) + 1; // st — верных подряд после последней ошибки
     const firstTry = !sess.retried.has(id);
     const gain = opts.hint ? 2 : (firstTry ? 10 : 4);
     p.xp += gain; sess.xp += gain;
@@ -492,7 +494,8 @@ function grade(id, correct, opts = {}) {
     else { c.b = Math.max(1, c.b); c.due = addDays(today(), 1); }
     c.last = today();
   } else {
-    sess.bad++; d.bad++; c.bad++;
+    sess.bad++; d.bad++; c.bad++; c.st = 0; c.lb = today();
+    if (opts.wrong) c.wr = String(opts.wrong).slice(0, 60); // как именно ошибся — для работы над ошибками
     d.errs[id] = (d.errs[id] || 0) + 1;
     c.b = Math.max(1, c.b - 2); c.due = today();
     sess.wrongIds.add(id);
@@ -550,7 +553,7 @@ function renderTask() {
   if (type === 'ruDict' && !canSpeak('ru')) type = 'ruPhoto';
   const R = {
     learn: tLearn, choiceEnRu: tChoice, choiceRuEn: tChoice, listen: tChoice, tiles: tTiles, typeRuEn: tType, listenType: tType,
-    ruLearn: tRuLearn, ruLearnS: tRuLearn, ruChoice: tRuChoice, ruSpace: tRuChoice, ruGaps: tRuGaps, ruPhoto: tRuPhoto, ruDict: tRuPhoto
+    ruLearn: tRuLearn, ruLearnS: tRuLearn, ruChoice: tRuChoice, ruSpace: tRuChoice, ruGaps: tRuGaps, ruPhoto: tRuPhoto, ruDict: tRuPhoto, ruFix: tRuFix
   }[type];
   R(item, type, t);
 }
@@ -803,44 +806,141 @@ function tRuChoice(item, type) {
     if (answered) return; answered = true;
     const ok = variants[i] === correct;
     app.querySelectorAll('.opt').forEach((b, j) => { if (variants[j] === correct) b.classList.add('right'); else if (j === i) b.classList.add('wrong'); });
-    grade(item.id, ok);
+    grade(item.id, ok, { wrong: ok ? null : variants[i] });
     feedback(ok, ok ? `<div class="big">${praise()}</div>` : `<div class="big">Запомни!</div><div class="ruword" style="font-size:1.6rem">${isS ? esc(correct) : ruHighlight(item)}</div>${mnemoBlock(item)}`, nextTask, ok ? 1100 : 0);
   };
   app.querySelectorAll('.opt').forEach(b => b.onclick = () => choose(+b.dataset.i));
   keyChoice(variants.length, choose);
 }
+/* клавиши, действующие только пока открыто текущее задание */
+function taskKeys(fn) {
+  const prev = sess.tasks[sess.i], my = gen;
+  const h = e => { if (gen !== my || !sess || sess.tasks[sess.i] !== prev || cur.screen !== 'session') { document.removeEventListener('keydown', h); return; } if (e.target && e.target.tagName === 'TEXTAREA') return; fn(e); };
+  document.addEventListener('keydown', h);
+  return () => document.removeEventListener('keydown', h);
+}
+/* вставь букву: буквы можно менять и стирать до нажатия «Проверить» */
 function tRuGaps(item) {
   const pr = ruParse(item); const gaps = pr.segs.filter(s => s.gap);
   const optsPer = gaps.map(g => shuffle(g.opts));
-  const ans = []; let curG = 0, wrongAny = false;
+  const ans = gaps.map(() => null); // null — пусто, '' — «буква не нужна»
+  let sel = 0, checked = false;
+  const firstEmpty = from => { for (let k = 0; k < gaps.length; k++) { const j = (from + k) % gaps.length; if (ans[j] === null) return j; } return -1; };
   const draw = () => {
     let k = 0, first = true;
-    const html = pr.segs.map(s => {
+    app.querySelector('#rw').innerHTML = pr.segs.map(s => {
       let t;
-      if (s.gap) { const idx = k++; t = idx < ans.length ? (ans[idx] || '·') : (idx === curG ? '?' : '_'); if (first && pr.cap && idx < ans.length) t = t.toUpperCase(); first = false; const bad = idx < ans.length && ans[idx] !== gaps[idx].ans; return `<span class="gap ${idx === curG ? 'cur' : ''}" ${bad ? 'style="color:var(--bad);border-color:var(--bad)"' : ''}>${esc(t)}</span>`; }
+      if (s.gap) {
+        const idx = k++, v = ans[idx];
+        t = v === null ? (idx === sel ? '?' : '_') : (v || '·');
+        if (first && pr.cap && v) t = t.toUpperCase(); first = false;
+        const st = checked ? (v === gaps[idx].ans ? 'style="color:var(--ok);border-color:var(--ok)"' : 'style="color:var(--bad);border-color:var(--bad)"') : '';
+        return `<span class="gap ${!checked && idx === sel ? 'cur' : ''} ${checked ? '' : 'tap'}" data-g="${idx}" ${st}>${esc(t)}</span>`;
+      }
       t = s.t; if (first && pr.cap) t = t.toUpperCase(); first = false; return esc(t);
     }).join('');
-    app.querySelector('#rw').innerHTML = html;
-    app.querySelector('#gopts').innerHTML = curG < gaps.length ? optsPer[curG].map((o, i) => `<button class="opt" style="font-size:1.6rem;min-width:90px" data-i="${i}">${o === '' ? '—' : esc(o)}</button>`).join('') : '';
+    const filled = ans.every(v => v !== null);
+    app.querySelector('#gopts').innerHTML = checked ? '' : optsPer[sel].map((o, i) => `<button class="opt ${ans[sel] === o ? 'picked' : ''}" style="font-size:1.6rem;min-width:90px" data-i="${i}">${o === '' ? '—' : esc(o)}</button>`).join('');
+    app.querySelector('#gact').innerHTML = checked ? '' : `<button class="btn ghost" id="erase" ${ans.some(v => v !== null) ? '' : 'disabled'}>⌫ Стереть</button>
+      <button class="btn ok" id="chk" ${filled ? '' : 'disabled'}>Проверить ✓</button>`;
+    app.querySelector('#ghint').innerHTML = checked ? '' : (filled ? 'Проверь себя: если сомневаешься — нажми на букву и поменяй её' : (gaps.length > 1 ? 'Нажми на пропуск, чтобы выбрать или исправить букву' : ''));
+    app.querySelectorAll('#rw .gap.tap').forEach(g => g.onclick = () => { sel = +g.dataset.g; draw(); });
     app.querySelectorAll('#gopts .opt').forEach(b => b.onclick = () => choose(+b.dataset.i));
+    const er = document.getElementById('erase'); if (er) er.onclick = erase;
+    const ch = document.getElementById('chk'); if (ch) ch.onclick = check;
   };
   app.innerHTML = `<div class="ex">${sessHeader()}<div class="card prompt pop">
-    <div class="q">Вставь пропущенную букву</div><div class="ruword" id="rw" style="margin:18px 0"></div>
-    <div class="row" id="gopts" style="justify-content:center"></div>${gaps.some(g => g.opts.includes('')) ? '<div class="small muted" style="margin-top:8px">«—» значит «здесь буква не нужна»</div>' : ''}
+    <div class="q">Вставь пропущенн${gaps.length > 1 ? 'ые буквы' : 'ую букву'}</div><div class="ruword" id="rw" style="margin:18px 0"></div>
+    <div class="row" id="gopts" style="justify-content:center"></div>
+    <div class="row" id="gact" style="justify-content:center;margin-top:12px"></div>
+    <div class="small muted" id="ghint" style="margin-top:8px"></div>
+    ${gaps.some(g => g.opts.includes('')) ? '<div class="small muted" style="margin-top:4px">«—» значит «здесь буква не нужна»</div>' : ''}
     </div><div id="fb"></div></div>`;
   bindQuit(); draw();
+  const unkeys = taskKeys(e => {
+    if (checked) return;
+    const n = +e.key;
+    if (n >= 1 && n <= optsPer[sel].length) { e.preventDefault(); choose(n - 1); }
+    else if (e.key === 'Backspace') { e.preventDefault(); erase(); }
+    else if (e.key === 'ArrowLeft') { sel = Math.max(0, sel - 1); draw(); }
+    else if (e.key === 'ArrowRight') { sel = Math.min(gaps.length - 1, sel + 1); draw(); }
+    else if (e.key === 'Enter' && ans.every(v => v !== null)) { e.preventDefault(); check(); }
+  });
   function choose(i) {
-    const v = optsPer[curG][i];
-    if (v !== gaps[curG].ans) { wrongAny = true; }
-    ans.push(v); curG++; draw();
-    if (curG >= gaps.length) {
-      const ok = !wrongAny;
-      grade(item.id, ok);
-      if (canSpeak('ru')) speak(pr.word, 'ru');
-      feedback(ok, ok ? `<div class="big">${praise()}</div><div class="ruword" style="font-size:1.5rem">${ruHighlight(item)}</div>` :
-        `<div class="big">Есть ошибка</div><div>Правильно: <span class="ruword" style="font-size:1.6rem">${ruHighlight(item)}</span></div>${mnemoBlock(item)}`, nextTask, ok ? 1300 : 0);
-    }
+    if (checked) return;
+    ans[sel] = optsPer[sel][i];
+    const nx = firstEmpty(sel + 1); if (nx >= 0) sel = nx;
+    draw();
   }
+  function erase() {
+    if (checked) return;
+    if (ans[sel] === null) { // пустой пропуск — стираем предыдущую заполненную букву
+      for (let j = sel - 1; j >= 0; j--) if (ans[j] !== null) { sel = j; break; }
+    }
+    ans[sel] = null; draw();
+  }
+  function check() {
+    if (checked || ans.some(v => v === null)) return;
+    checked = true; unkeys();
+    const ok = ans.every((v, j) => v === gaps[j].ans);
+    draw();
+    grade(item.id, ok, { wrong: ok ? null : ruBuild(pr, ans) });
+    if (canSpeak('ru')) speak(pr.word, 'ru');
+    feedback(ok, ok ? `<div class="big">${praise()}</div><div class="ruword" style="font-size:1.5rem">${ruHighlight(item)}</div>` :
+      `<div class="big">Есть ошибка</div><div>Правильно: <span class="ruword" style="font-size:1.6rem">${ruHighlight(item)}</span></div>${mnemoBlock(item)}`, nextTask, ok ? 1300 : 0);
+  }
+}
+/* сравнение «как написал» и «как правильно»: неверные буквы подсвечиваются */
+function diffMark(wrong, right) {
+  const a = [...wrong], b = [...right.toLowerCase()];
+  let s = 0; while (s < a.length && s < b.length && a[s].toLowerCase() === b[s]) s++;
+  let e = 0; while (e < a.length - s && e < b.length - s && a[a.length - 1 - e].toLowerCase() === b[b.length - 1 - e]) e++;
+  const mid = a.slice(s, a.length - e).join('');
+  return esc(a.slice(0, s).join('')) + (mid ? `<span class="wrongch">${esc(mid)}</span>` : `<span class="wrongch">·</span>`) + esc(a.slice(a.length - e).join(''));
+}
+/* работа над ошибкой: разбор слова + списывание без ошибок */
+function tRuFix(item) {
+  const isS = item.t === 's', word = ruWordOf(item), c = card(P(), item.id);
+  app.innerHTML = `<div class="ex">${sessHeader()}<div class="card prompt pop">
+    <div class="q">🩹 Работа над ошибкой</div>
+    ${c.wr ? `<div style="margin-top:10px">Было написано: <span class="ruword wrongword" style="font-size:1.5rem">${diffMark(c.wr, word)}</span></div>` : ''}
+    <div style="margin-top:8px">Правильно: <span class="ruword" style="font-size:2rem">${isS ? `<span class="hl">${esc(word)}</span>` : ruHighlight(item)}</span></div>
+    <div class="muted small" style="margin-top:6px">${isS ? 'Пишется ' + (word.includes(' ') ? '<b>раздельно</b>' : word.includes('-') ? '<b>через дефис</b>' : '<b>слитно</b>') : `Трудное место выделено. Проговори по слогам, как пишется: <b>${esc(syllables(word))}</b>`}</div>
+    <div class="row" style="justify-content:center;margin-top:10px">${canSpeak('ru') ? '<button class="btn ghost" id="say">🔊 Послушать</button>' : ''}</div>
+    <div class="mnemo"><b>💡 Подсказка, чтобы больше не ошибаться</b> <span class="small muted">(проверочное слово или ассоциация)</span>
+    <textarea class="mn" id="mn">${esc(c.mn || '')}</textarea></div>
+    <div style="margin-top:12px"><b>Спиши слово без ошибок</b> <span class="muted small">(<span id="cnt">0</span> из 2)</span></div>
+    <input class="answer-input" id="inp" autocomplete="off" spellcheck="false" placeholder="напиши слово">
+    <div class="row" style="justify-content:center;margin-top:10px"><button class="btn" id="chk">Проверить ✓</button></div>
+    </div><div id="fb"></div></div>`;
+  bindQuit();
+  const sb = document.getElementById('say'); if (sb) sb.onclick = () => speak(word, 'ru');
+  if (canSpeak('ru')) setTimeout(() => speak(word, 'ru'), 300);
+  const inp = document.getElementById('inp'), norm = s => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+  let n = 0;
+  const check = () => {
+    if (!inp.value.trim()) return;
+    if (norm(inp.value) !== norm(word)) { beep(false); inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake'); toast('Сравни внимательно с образцом и исправь 🙂'); return; }
+    n++; document.getElementById('cnt').textContent = n; beep(true);
+    if (n < 2) { inp.value = ''; inp.focus(); return; }
+    const mn = document.getElementById('mn').value.trim(); if (mn) c.mn = mn; else delete c.mn;
+    touch(c); P().xp += 3; sess.xp += 3; saveSoon(); nextTask();
+  };
+  document.getElementById('chk').onclick = check;
+  inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); check(); } };
+}
+function ruFixPool(p) {
+  return ruDeck(p).filter(x => { const c = p.cards[x.id]; return c && c.bad > 0 && (c.st || 0) < 3; })
+    .sort((a, b) => { const A = p.cards[a.id], B = p.cards[b.id]; return (B.lb || '').localeCompare(A.lb || '') || (B.bad - A.bad); });
+}
+function startRuFix() {
+  const p = P(), words = ruFixPool(p).slice(0, 8);
+  if (!words.length) return toast('Ошибок в русских словах нет — так держать! 💪');
+  // 1) разбор каждой ошибки, 2) проверка вперемешку: вставь букву и напиши по памяти
+  const tasks = words.map(x => ({ type: 'ruFix', id: x.id }));
+  const checks = [];
+  words.forEach(x => { if (x.t === 's') checks.push({ type: 'ruSpace', id: x.id }); else checks.push({ type: 'ruGaps', id: x.id }, { type: 'ruPhoto', id: x.id }); });
+  startSession(tasks.concat(shuffle(checks)), { title: 'Работа над ошибками: русский', subj: 'ru', game: true });
 }
 function tRuPhoto(item, type) {
   const word = ruParse(item).word;
@@ -865,7 +965,7 @@ function tRuPhoto(item, type) {
   const check = () => {
     if (done || !inp.value.trim()) return; done = true; inp.disabled = true;
     const ok = norm(inp.value) === norm(word);
-    grade(item.id, ok, { retryType: 'ruGaps' });
+    grade(item.id, ok, { retryType: 'ruGaps', wrong: ok ? null : inp.value.trim() });
     feedback(ok, ok ? `<div class="big">${praise()}</div><div class="ruword" style="font-size:1.5rem">${ruHighlight(item)}</div>` :
       `<div class="big">Ошибка</div><div>Ты написал(а): <s>${esc(inp.value)}</s><br>Правильно: <span class="ruword" style="font-size:1.6rem">${ruHighlight(item)}</span></div>${mnemoBlock(item)}`, nextTask, ok ? 1300 : 0);
   };

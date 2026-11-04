@@ -135,3 +135,12 @@ details.unit summary{padding:14px 16px;cursor:pointer;font-weight:700}
 @keyframes shake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
 .confetti{position:fixed;top:-20px;font-size:1.6rem;pointer-events:none;z-index:60;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
+/* исправление букв и работа над ошибками */
+.gap.tap{cursor:pointer;border-radius:6px 6px 0 0}
+.gap.tap:hover{background:#f1edff}
+.opt.picked{background:#efeaff;border-color:var(--accent)}
+.btn[disabled]{opacity:.45;cursor:default;box-shadow:none}
+.wrongword{text-decoration:line-through;text-decoration-color:#0003}
+.wrongch{color:var(--bad);background:var(--badbg);border-radius:4px;padding:0 2px}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.shake{animation:shake .3s;border-color:var(--bad)!important}
