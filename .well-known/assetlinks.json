@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.gogaclaudyan_ops.twa",
+        "sha256_cert_fingerprints": ["9C:57:09:4C:36:E2:7B:C1:2D:A3:9E:0B:3B:64:BC:4F:7A:3D:D7:3F:F6:40:B9:C2:E0:05:7D:6A:C0:18:D9:E7"]
+      }
+    }]
