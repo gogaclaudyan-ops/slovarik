@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "io.github.gogaclaudyan_ops.twa",
-        "sha256_cert_fingerprints": ["9C:57:09:4C:36:E2:7B:C1:2D:A3:9E:0B:3B:64:BC:4F:7A:3D:D7:3F:F6:40:B9:C2:E0:05:7D:6A:C0:18:D9:E7"]
+        "sha256_cert_fingerprints": ["A5:CA:82:54:BD:FF:9D:39:3D:29:BB:25:CB:FD:6D:2F:5E:94:12:3B:84:08:FB:25:7B:E7:01:7E:63:BB:8B:BC"]
       }
-    }]
+    }] 
