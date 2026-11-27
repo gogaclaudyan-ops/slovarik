@@ -1,7 +1,7 @@
 'use strict';
 // Конфигурация Словарика 2.0
 window.APP_CONFIG = {
-  version: '2.0.0',
+  version: '2.0.1',
   schemaVersion: 2,
   gh: {
     owner: 'gogaclaudyan-ops',

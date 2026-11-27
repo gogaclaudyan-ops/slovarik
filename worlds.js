@@ -62,6 +62,7 @@ const SBR_SFX = ['ゴゴゴ!', 'SPIN x2!', 'ドドド!', 'GOLDEN RATIO!', 'ORA!!
 
 function sbrProgress(p) {
   let curStageIdx = 0;
+  let changed = false;
   const stages = SBR_STAGES.map((st, idx) => {
     const words = EN7.filter(w => w.u === st.unit);
     const done = words.filter(w => (p.cards[w.id]?.b || 0) >= LEARNED_BOX).length;
@@ -70,11 +71,13 @@ function sbrProgress(p) {
     if (cleared && !p.world.artifacts.includes(st.artifact)) {
       p.world.artifacts.push(st.artifact);
       p.world.t = Date.now();
+      changed = true;
     }
     if (!cleared && curStageIdx === idx) curStageIdx = idx;
     else if (cleared && curStageIdx === idx) curStageIdx = Math.min(SBR_STAGES.length - 1, idx + 1);
     return { ...st, done, total: words.length, pct, cleared };
   });
+  if (changed) save();
   return { stages, curStageIdx };
 }
 

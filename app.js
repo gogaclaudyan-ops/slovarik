@@ -613,8 +613,13 @@ function tRuPhoto(el, t) {
   el.innerHTML = `<div class="q">📸 Запомни слово глазами (3 секунды)</div>
     <div class="ruword" style="margin:24px 0">${it.t === 's' ? esc(word) : ruHighlight(it)}</div>
     <div class="muted small">Проговори по слогам: ${esc(syllables(word))}</div>`;
-  const tm = setTimeout(() => { if (cur.screen === 'session' && ses && ses.tasks[ses.i] === t) tRuType(el, t, true); }, 3200);
-  el.onclick = () => { clearTimeout(tm); tRuType(el, t, true); };
+  const goType = () => {
+    clearTimeout(tm);
+    el.onclick = null;
+    if (cur.screen === 'session' && ses && ses.tasks[ses.i] === t) tRuType(el, t, true);
+  };
+  const tm = setTimeout(goType, 3200);
+  el.onclick = goType;
 }
 
 function tRuFix(el, t) {
@@ -734,7 +739,7 @@ function startPairs() {
           if (done.size === words.length) {
             const sec = Math.round((Date.now() - t0) / 1000);
             dayRec(p).games++; p.xp += 30;
-            if (p.id === 'nastya') p.world.gems = (p.world.gems || 0) + 35;
+            if (p.id === 'nastya') { p.world.gems = (p.world.gems || 0) + 35; p.world.t = Date.now(); }
             save(); checkAch({ pairsFast: sec < 60 }); confetti(25);
             toast(`🎉 Все пары найдены за ${sec} сек! +30 ⭐`, 3200);
             setTimeout(() => go('kid'), 1600);
@@ -777,7 +782,7 @@ function startBlitz() {
     if (left <= 0) {
       clearInterval(timer);
       dayRec(p).games++; p.xp += score * 2;
-      if (p.id === 'nastya') p.world.gems = (p.world.gems || 0) + score * 2;
+      if (p.id === 'nastya') { p.world.gems = (p.world.gems || 0) + score * 2; p.world.t = Date.now(); }
       if (score > (p.bestBlitz || 0)) p.bestBlitz = score;
       save(); checkAch({ blitz: score }); confetti(25);
       app.innerHTML = `<div class="ex card center pop">
@@ -930,3 +935,9 @@ window.addEventListener('beforeunload', () => saveLocal());
 /* ---------- Старт ---------- */
 go('home');
 if (ghToken()) syncAll();
+
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
+  });
+}
