@@ -7,6 +7,9 @@ const app = document.getElementById('app');
 
 function setTheme(pid) {
   document.body.className = pid === 'nastya' ? 't-nastya' : pid === 'andrey' ? 't-andrey' : '';
+  const mode = pid === 'nastya' && S.profiles.nastya ? (S.profiles.nastya.world.roomTime || 'day') : 'day';
+  document.body.dataset.roomTime = pid === 'nastya' ? mode : '';
+  if (typeof BG_FX !== 'undefined') BG_FX.setMode(pid || 'home', mode);
 }
 
 function go(screen, arg) {
@@ -23,6 +26,9 @@ function go(screen, arg) {
     parent: renderParent, pin: renderPin, shop: renderCozyShop, gacha: renderGacha
   };
   (map[screen] || renderHome)(arg);
+  app.classList.remove('screen-enter');
+  void app.offsetWidth;
+  app.classList.add('screen-enter');
   window.scrollTo(0, 0);
 }
 
@@ -31,7 +37,7 @@ function renderHome() {
   const ps = [S.profiles.nastya, S.profiles.andrey];
   app.innerHTML = `
     <div class="home-header center">
-      <h1>📚 Словарик-тренажёр <span class="ver-badge">v${CFG.version}</span></h1>
+      <h1>Словарик-тренажёр <span class="ver-badge">v${CFG.version}</span></h1>
       <p class="muted">Выбери своего героя и отправляйся в приключение!</p>
     </div>
     <div class="profiles">
@@ -39,14 +45,14 @@ function renderHome() {
         const g = goalState(p), st = streak(p);
         const isSbr = p.id === 'andrey';
         const tag = isSbr
-          ? '<div class="world-tag sbr">🐎 Steel Ball Run · Аниме-гонка</div>'
-          : '<div class="world-tag cozy">🎀 Уютное кафе и Питомцы</div>';
+          ? '<div class="world-tag sbr">Steel Ball Run · Аниме-гонка</div>'
+          : '<div class="world-tag cozy">Уютное кафе и Питомцы</div>';
         const heroMedallion = isSbr
-          ? `<div class="home-medallion sbr">${renderGyroSvg('idle', 94)}</div>`
-          : `<div class="home-medallion cozy">${renderPetSvg(p.world.activePet, 'idle', 94)}</div>`;
+          ? `<div class="home-medallion sbr">${renderGyroSvg('idle', 98)}</div>`
+          : `<div class="home-medallion cozy">${renderPetSvg(p.world.activePet, 'idle', 98)}</div>`;
         const worldStat = isSbr
-          ? `🏆 Артефакты: <b>${(p.world.artifacts || []).length}/9</b> · 🌀 Spin ×<b>${p.world.spinBest || 0}</b>`
-          : `💎 <b>${p.world.gems || 0}</b> · 🐾 Питомцев: <b>${(p.world.pets || []).length}/${COZY_PETS.length}</b>`;
+          ? `Артефакты <b>${(p.world.artifacts || []).length}/9</b> · Spin <b>×${p.world.spinBest || 0}</b>`
+          : `<b>${p.world.gems || 0}</b> кристаллов · Питомцев <b>${(p.world.pets || []).length}/${COZY_PETS.length}</b>`;
         return `<div class="card profile ${p.id}" data-p="${p.id}">
           ${heroMedallion}
           <h2>${p.name}</h2>
@@ -55,15 +61,14 @@ function renderHome() {
           <div class="small home-world-stat">${worldStat}</div>
           <div style="margin:12px 0">
             <div class="bar ${g.done ? 'okc' : ''}"><i style="width:${g.pct}%"></i></div>
-            <div class="small muted" style="margin-top:6px">Сегодня: ${g.min} мин из ${p.set.goalMin} · 🔥 ${st} ${plural(st, 'день', 'дня', 'дней')}</div>
+            <div class="small muted" style="margin-top:6px">Сегодня: ${g.min} из ${p.set.goalMin} мин · Серия ${st} ${plural(st, 'день', 'дня', 'дней')}</div>
           </div>
-          <div class="small muted">Выучено слов: <b>${learnedCount(p)}</b></div>
-          <div class="home-cta">${isSbr ? 'Погнали в заезд →' : 'Зайти в кафе →'}</div>
+          <div class="home-cta shine-btn">${isSbr ? 'Погнали в заезд →' : 'Зайти в кафе →'}</div>
         </div>`;
       }).join('')}
     </div>
     <div class="center">
-      <button class="btn ghost" id="toParent">🔐 Для родителей</button>
+      <button class="btn ghost btn-ico" id="toParent">${UI_ICO.parent}<span>Для родителей</span></button>
     </div>`;
   app.querySelectorAll('[data-p]').forEach(el => el.onclick = () => {
     playPop();
@@ -74,7 +79,7 @@ function renderHome() {
   document.getElementById('toParent').onclick = () => go('pin', { target: 'parent' });
 }
 
-/* ---------- Экран ребёнка ---------- */
+/* ---------- Экран ребёнка (игровое лобби) ---------- */
 function renderKid() {
   const p = P(), g = goalState(p), st = streak(p), lv = level(p.xp);
   const en = enDeck(p), ru = ruDeck(p), td = today();
@@ -87,61 +92,105 @@ function renderKid() {
   const xpPct = Math.min(100, Math.round((p.xp - xpFrom) / (xpTo - xpFrom) * 100));
   const isSbr = p.id === 'andrey';
 
-  app.innerHTML = `
+  app.innerHTML = `<div class="kid-lobby">
     <div class="topbar">
-      <button class="icon-btn" id="back" title="Сменить профиль">⬅️</button>
-      <div class="title">${p.avatar} ${p.name}</div>
+      <button class="icon-btn" id="back" title="Сменить профиль" aria-label="Сменить профиль">${UI_ICO.back}</button>
+      <div class="title">${p.name}</div>
       <div class="spacer"></div>
-      <span class="pill">🔥 ${st}</span>
-      <span class="pill">⭐ ${p.xp}</span>
-      ${!isSbr ? `<span class="pill">💎 ${p.world.gems || 0}</span>` : ''}
-      <button class="icon-btn sound-btn" id="sndBtn" title="Включить или выключить звуки">${isSoundOn() ? '🔊' : '🔇'}</button>
+      <span class="pill stat-pill">${UI_ICO.fire}<span>${st}</span></span>
+      <span class="pill stat-pill">${UI_ICO.star}<span>${p.xp}</span></span>
+      <button class="icon-btn sound-btn" id="sndBtn" title="Звук" aria-label="Звук">${isSoundOn() ? UI_ICO.soundOn : UI_ICO.soundOff}</button>
     </div>
 
     ${isSbr ? renderSbrHero(p) : renderCozyHero(p)}
 
-    <div class="card goal-card">
+    <div class="section-title">Главные тренировки</div>
+    <div class="play-hero-grid">
+      <button class="play-card en-card shine-btn" id="tEn">
+        <div class="play-ico">${isSbr ? UI_ICO.sbrHorse : UI_ICO.en}</div>
+        <div class="play-copy">
+          <b>${isSbr ? 'Заезд: Английский' : 'Английский'}</b>
+          <span>${dueEn ? `Повторить: ${dueEn}` : `Новых: ${newEn}`}</span>
+        </div>
+      </button>
+      <button class="play-card ru-card shine-btn" id="tRu">
+        <div class="play-ico">${isSbr ? UI_ICO.sbrSpin : UI_ICO.ru}</div>
+        <div class="play-copy">
+          <b>${isSbr ? 'Вращение: Русский' : 'Словарные слова'}</b>
+          <span>${dueRu ? `Повторить: ${dueRu}` : `Новых: ${newRu}`}</span>
+        </div>
+      </button>
+    </div>
+
+    <div class="section-title">${isSbr ? 'Режимы и дуэли' : 'Игры и задания'}</div>
+    <div class="game-grid">
+      <button class="gcard" id="tEnNew">
+        <div class="gcard-ico">${UI_ICO.enNew}</div>
+        <b>Новые слова</b>
+        <span>Английский · ${newEn}</span>
+      </button>
+      <button class="gcard" id="tEnRev">
+        <div class="gcard-ico">${UI_ICO.enRev}</div>
+        <b>Повторение</b>
+        <span>${dueEn ? dueEn + ' ждут' : 'Закрепить'}</span>
+      </button>
+      <button class="gcard" id="tRuPhoto">
+        <div class="gcard-ico">${UI_ICO.photo}</div>
+        <b>Фото-диктант</b>
+        <span>Запомни образ</span>
+      </button>
+      <button class="gcard" id="tRuFix">
+        <div class="gcard-ico">${UI_ICO.fix}</div>
+        <b>Найди ошибку</b>
+        <span>Хитрые слова</span>
+      </button>
+      <button class="gcard" id="gPairs">
+        <div class="gcard-ico">${UI_ICO.pairs}</div>
+        <b>Найди пары</b>
+        <span>Память + перевод</span>
+      </button>
+      <button class="gcard" id="gBlitz">
+        <div class="gcard-ico">${UI_ICO.blitz}</div>
+        <b>Блиц 60 сек</b>
+        <span>Рекорд: ${p.bestBlitz || 0}</span>
+      </button>
+      <button class="gcard gcard-wide ${isSbr && badAll ? 'boss-tile' : ''}" id="gMistakes">
+        <div class="gcard-ico">${isSbr ? UI_ICO.duel : UI_ICO.heal}</div>
+        <div>
+          <b>${isSbr ? 'Дуэль всадников (ошибки)' : 'Работа над ошибками'}</b>
+          <span>${badAll ? badAll + ' трудных слов ждут реванша' : 'Ошибок нет — отличная форма!'}</span>
+        </div>
+      </button>
+    </div>
+
+    <div class="card goal-card" style="margin-top:16px">
       <div class="goal">
         <div class="ring ${g.done ? 'ring-done' : ''}" style="--p:${g.pct}"><div>${g.pct}%<small>цель дня</small></div></div>
-        <div style="flex:1;min-width:200px">
-          <h3>${g.done ? '🎉 Цель дня выполнена!' : 'План на сегодня'}</h3>
+        <div style="flex:1;min-width:190px">
+          <h3>${g.done ? 'Цель дня выполнена!' : 'План на сегодня'}</h3>
           <div class="small muted">Время: <b>${g.min}</b> из ${p.set.goalMin} мин · Тренировок: <b>${g.ses}</b> из ${p.set.goalSessions}</div>
-          <div style="margin-top:10px" class="small muted">Уровень ${lv} (${p.xp - xpFrom}/${xpTo - xpFrom} XP)</div>
+          <div style="margin-top:8px" class="small muted">Уровень ${lv} (${p.xp - xpFrom}/${xpTo - xpFrom} XP)</div>
           <div class="bar" style="margin-top:4px"><i style="width:${xpPct}%"></i></div>
         </div>
       </div>
       ${renderDailyQuests(p)}
     </div>
 
-    <div class="section-title">Английский язык (${p.grade} класс)</div>
-    <div class="menu">
-      <button class="card tile main" id="tEn"><div class="em">${isSbr ? '🐎' : '🇬🇧'}</div><div><b>${isSbr ? 'Заезд: Английский' : 'Тренировка английского'}</b><span>Повторить: ${dueEn} · Новых: ${newEn}</span></div></button>
-      <button class="card tile" id="tEnNew"><div class="em">✨</div><div><b>Новые слова</b><span>Познакомиться и запомнить</span></div></button>
-      <button class="card tile" id="tEnRev"><div class="em">🔁</div><div><b>Повторение</b><span>${dueEn ? dueEn + ' ждут повторения' : 'Закрепить изученные'}</span></div></button>
-    </div>
-
-    <div class="section-title">Русский язык — словарные слова</div>
-    <div class="menu">
-      <button class="card tile main" id="tRu"><div class="em">${isSbr ? '🌀' : '✍️'}</div><div><b>${isSbr ? 'Тренировка Вращения: Русский' : 'Тренировка словарных слов'}</b><span>Повторить: ${dueRu} · Новых: ${newRu}</span></div></button>
-      <button class="card tile" id="tRuPhoto"><div class="em">📸</div><div><b>Фото-диктант</b><span>Запомни образ — напиши сам</span></div></button>
-      <button class="card tile" id="tRuFix"><div class="em">🔍</div><div><b>Найди ошибку</b><span>Исправь хитрые слова</span></div></button>
-    </div>
-
-    <div class="section-title">${isSbr ? 'Дуэли, гонки и трофеи' : 'Игры и коллекция'}</div>
-    <div class="menu">
-      <button class="card tile" id="gPairs"><div class="em">🃏</div><div><b>Найди пары</b><span>Память + перевод</span></div></button>
-      <button class="card tile" id="gBlitz"><div class="em">⚡</div><div><b>Блиц 60 секунд</b><span>Рекорд: ${p.bestBlitz || 0}</span></div></button>
-      <button class="card tile ${isSbr && badAll ? 'boss-tile' : ''}" id="gMistakes"><div class="em">${isSbr ? '⚔️' : '🩹'}</div><div><b>${isSbr ? 'Дуэль всадников (ошибки)' : 'Работа над ошибками'}</b><span>${badAll ? badAll + ' трудных слов' : 'Ошибок нет — молодец!'}</span></div></button>
-      <button class="card tile" id="toWords"><div class="em">📖</div><div><b>Мои слова</b><span>Выучено: ${learnedCount(p)}</span></div></button>
-      <button class="card tile" id="toAwards"><div class="em">${isSbr ? '🏆' : '🎀'}</div><div><b>${isSbr ? 'Трофеи и артефакты' : 'Альбом наклеек'}</b><span>Открыто: ${Object.keys(p.ach).length} из ${ACH.length}</span></div></button>
-    </div>`;
+    <nav class="game-dock" aria-label="Навигация">
+      <button type="button" class="dock-btn active" id="dockHome">${UI_ICO.home}<span>Мир</span></button>
+      <button type="button" class="dock-btn" id="toWords">${UI_ICO.words}<span>Слова (${learnedCount(p)})</span></button>
+      <button type="button" class="dock-btn" id="toAwards">${UI_ICO.awards}<span>Награды (${Object.keys(p.ach).length})</span></button>
+    </nav>
+  </div>`;
 
   document.getElementById('back').onclick = () => { cur.pid = null; go('home'); };
   document.getElementById('sndBtn').onclick = e => {
     const on = toggleSound();
-    e.currentTarget.textContent = on ? '🔊' : '🔇';
-    toast(on ? '🔊 Звуки включены' : '🔇 Звуки выключены', 1500);
+    e.currentTarget.innerHTML = on ? UI_ICO.soundOn : UI_ICO.soundOff;
+    e.currentTarget.dataset.sound = on ? 'on' : 'off';
+    toast(on ? 'Звуки включены' : 'Звуки выключены', 1500);
   };
+  document.getElementById('dockHome').onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   document.getElementById('tEn').onclick = () => startSession('en', 'mix');
   document.getElementById('tEnNew').onclick = () => startSession('en', 'new');
   document.getElementById('tEnRev').onclick = () => startSession('en', 'rev');
@@ -166,13 +215,13 @@ function renderCozyShop() {
   const p = P();
   app.innerHTML = `
     <div class="topbar">
-      <button class="icon-btn" id="back">⬅️</button>
-      <div class="title">🛋️ Магазин уюта</div>
+      <button class="icon-btn" id="back" aria-label="Назад">${UI_ICO.back}</button>
+      <div class="title">Магазин уюта</div>
       <div class="spacer"></div>
-      <span class="pill">💎 ${p.world.gems || 0}</span>
+      <span class="pill stat-pill">${UI_ICO.gem}<span>${p.world.gems || 0}</span></span>
     </div>
     <div class="cozy-stage" id="cozyHero">
-      <div class="room-speech" id="roomSpeech">✨ Украшай своё кафе — нажми на предметы в комнате, чтобы проверить их!</div>
+      <div class="room-speech" id="roomSpeech">Украшай своё кафе — нажми на предметы в комнате, чтобы проверить их!</div>
       <div class="cozy-room-wrap" id="cozyRoomWrap">${renderCozyRoomSvg(p)}</div>
     </div>
     <div class="shop-grid">
@@ -183,8 +232,8 @@ function renderCozyShop() {
           <b>${esc(it.name)}</b>
           <div style="margin-top:8px">
             ${owned
-              ? '<span class="status-ok small">✅ В комнате</span>'
-              : `<button class="btn small" data-buy="${it.id}">Купить · 💎 ${it.price}</button>`}
+              ? '<span class="status-ok small">В комнате</span>'
+              : `<button class="btn small btn-ico" data-buy="${it.id}">${UI_ICO.gem}<span>${it.price}</span></button>`}
           </div>
         </div>`;
       }).join('')}
@@ -194,12 +243,13 @@ function renderCozyShop() {
   app.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => {
     const it = COZY_ITEMS.find(x => x.id === b.dataset.buy);
     if (!it) return;
-    if ((p.world.gems || 0) < it.price) { toast('Пока не хватает 💎 — пройди тренировку!'); return; }
+    if ((p.world.gems || 0) < it.price) { toast('Пока не хватает кристаллов — пройди тренировку!'); return; }
     p.world.gems -= it.price;
     p.world.room.push(it.id);
     p.world.t = Date.now();
     save(); confetti(18); playFanfare();
-    toast(`✨ ${it.name} теперь в твоей комнате!`);
+    if (typeof BG_FX !== 'undefined') BG_FX.burst(window.innerWidth / 2, window.innerHeight * 0.35, 18);
+    toast(`${it.name} теперь в твоей комнате!`);
     renderCozyShop();
   });
 }
@@ -231,10 +281,10 @@ function renderGacha(revealed) {
 
   app.innerHTML = `
     <div class="topbar">
-      <button class="icon-btn" id="back">⬅️</button>
-      <div class="title">🎁 Волшебные капсулы</div>
+      <button class="icon-btn" id="back" aria-label="Назад">${UI_ICO.back}</button>
+      <div class="title">Волшебные капсулы</div>
       <div class="spacer"></div>
-      <span class="pill">💎 ${p.world.gems || 0}</span>
+      <span class="pill stat-pill">${UI_ICO.gem}<span>${p.world.gems || 0}</span></span>
     </div>
     <div class="gacha-box" id="gachaStage">${stageHtml}</div>
     <h3>Твои питомцы (${p.world.pets.length}/${COZY_PETS.length}) — нажми, чтобы взять на тренировку:</h3>
@@ -383,7 +433,7 @@ function renderTask() {
 
   app.innerHTML = `<div class="ex">
     <div class="progress">
-      <button class="icon-btn" id="quit" title="Выйти">✖️</button>
+      <button class="icon-btn" id="quit" title="Выйти" aria-label="Выйти">${UI_ICO.close}</button>
       <div class="bar"><i style="width:${pct}%"></i></div>
       <span class="small muted">${ses.i + 1}/${ses.tasks.length}</span>
     </div>
@@ -412,6 +462,7 @@ function grade(t, ok, userAns, rightText) {
       const mult = p.id === 'andrey' ? (ses.combo >= 5 ? 5 : ses.combo >= 3 ? 3 : ses.combo >= 2 ? 2 : 1) : 1;
       gain = (t.retry ? 5 : 10) + (mult > 1 ? mult * 2 : 0);
       ses.xp += gain; p.xp += gain;
+      if (typeof BG_FX !== 'undefined') BG_FX.burst(window.innerWidth / 2, window.innerHeight * 0.36, 15);
       if (p.id === 'andrey') {
         if (ses.combo > (p.world.spinBest || 0)) p.world.spinBest = ses.combo;
         if (ses.boss && ses.bossHp > 0) ses.bossHp--;
@@ -791,7 +842,7 @@ function startPairs() {
   cur.active = true;
   function draw() {
     app.innerHTML = `<div class="ex">
-      <div class="topbar"><button class="icon-btn" id="back">⬅️</button><div class="title">🃏 Найди пары</div><div class="spacer"></div><span class="pill">Ходов: ${moves}</span></div>
+      <div class="topbar"><button class="icon-btn" id="back" aria-label="Назад">${UI_ICO.back}</button><div class="title">Найди пары</div><div class="spacer"></div><span class="pill">Ходов: ${moves}</span></div>
       <div class="pairs">${cards.map((c, i) => {
         const isD = done.has(c.id), isO = open.includes(i);
         return `<button class="pc ${isD ? 'done' : isO ? 'open flip-in' : ''}" data-i="${i}">${isD || isO ? esc(c.text) : '?'}</button>`;
@@ -840,7 +891,7 @@ function startBlitz() {
     if (left <= 0) return;
     const w = pick(deck), opts = shuffle([w, ...shuffle(deck.filter(x => x.id !== w.id && x.ru !== w.ru)).slice(0, 3)]);
     app.innerHTML = `<div class="ex">
-      <div class="topbar"><button class="icon-btn" id="back">⬅️</button><div class="title">⚡ Блиц 60 сек</div><div class="spacer"></div><span class="pill timer ${left <= 10 ? 'urgent' : ''}" id="tm">⏱ ${left}</span><span class="pill">⭐ ${score}</span></div>
+      <div class="topbar"><button class="icon-btn" id="back" aria-label="Назад">${UI_ICO.back}</button><div class="title">Блиц 60 сек</div><div class="spacer"></div><span class="pill timer ${left <= 10 ? 'urgent' : ''}" id="tm">⏱ ${left}</span><span class="pill stat-pill">${UI_ICO.star}<span>${score}</span></span></div>
       <div class="card center pop">
         ${bCombo >= 3 ? `<div class="combo-chip" style="margin-bottom:6px">🔥 Серия ×${bCombo}</div>` : ''}
         <div class="blitz-q">${esc(w.en)}</div>
@@ -894,11 +945,11 @@ function renderWords() {
   const p = P(), en = enDeck(p), ru = ruDeck(p);
   const lvlStr = b => '●'.repeat(Math.min(5, b || 0)) + '○'.repeat(Math.max(0, 5 - (b || 0)));
   app.innerHTML = `
-    <div class="topbar"><button class="icon-btn" id="back">⬅️</button><div class="title">📖 Мои слова</div></div>
-    <details class="unit" open><summary>🇬🇧 Английский (${en.length})</summary>
+    <div class="topbar"><button class="icon-btn" id="back" aria-label="Назад">${UI_ICO.back}</button><div class="title">Мои слова</div></div>
+    <details class="unit" open><summary>Английский (${en.length})</summary>
       <table class="wl">${en.map(w => `<tr><td><b>${esc(w.en)}</b><div class="small muted">${esc(w.ru)}</div></td><td class="lvl" style="text-align:right">${lvlStr(p.cards[w.id]?.b)}</td></tr>`).join('')}</table>
     </details>
-    <details class="unit"><summary>✍️ Словарные слова (${ru.length})</summary>
+    <details class="unit"><summary>Словарные слова (${ru.length})</summary>
       <table class="wl">${ru.map(w => `<tr><td><b>${esc(ruWordOf(w))}</b> <span class="small muted">${w.g} кл.</span></td><td class="lvl" style="text-align:right">${lvlStr(p.cards[w.id]?.b)}</td></tr>`).join('')}</table>
     </details>`;
   document.getElementById('back').onclick = () => go('kid');
@@ -907,12 +958,12 @@ function renderWords() {
 function renderAwards() {
   const p = P();
   const extra = p.id === 'andrey'
-    ? `<div class="card" style="margin-bottom:14px"><h3>🏆 Артефакты Steel Ball Run (${p.world.artifacts.length}/9)</h3>
+    ? `<div class="card" style="margin-bottom:14px"><h3>Артефакты Steel Ball Run (${p.world.artifacts.length}/9)</h3>
         <div class="row">${p.world.artifacts.length ? p.world.artifacts.map(a => `<span class="pill">${esc(a)}</span>`).join('') : '<span class="muted small">Пройди этапы гонки (от 70% слов юнита), чтобы открыть артефакты!</span>'}</div></div>`
-    : `<div class="card" style="margin-bottom:14px"><h3>🐾 Коллекция питомцев (${p.world.pets.length}/${COZY_PETS.length})</h3>
+    : `<div class="card" style="margin-bottom:14px"><h3>Коллекция питомцев (${p.world.pets.length}/${COZY_PETS.length})</h3>
         <div class="row">${p.world.pets.map(id => { const pet = petById(id); return `<span class="pill pet-award-pill">${renderPetSvg(pet.id, 'idle', 26)} ${esc(pet.name)}</span>`; }).join('')}</div></div>`;
   app.innerHTML = `
-    <div class="topbar"><button class="icon-btn" id="back">⬅️</button><div class="title">${p.id === 'andrey' ? '🏆 Трофеи и награды' : '🎀 Альбом наклеек'}</div></div>
+    <div class="topbar"><button class="icon-btn" id="back" aria-label="Назад">${UI_ICO.back}</button><div class="title">${p.id === 'andrey' ? 'Трофеи и награды' : 'Альбом наклеек'}</div></div>
     ${extra}
     <div class="badges">${ACH.map(([id, em, name, desc]) => {
       const got = p.ach[id];
@@ -964,8 +1015,8 @@ function renderParent() {
 
   app.innerHTML = `
     <div class="topbar">
-      <button class="icon-btn" id="back">⬅️</button>
-      <div class="title">🔐 Панель родителей · v${CFG.version}</div>
+      <button class="icon-btn" id="back" aria-label="Назад">${UI_ICO.back}</button>
+      <div class="title">Панель родителей · v${CFG.version}</div>
     </div>
     ${kidCards}
     <div class="card" style="margin-bottom:14px">
@@ -1022,6 +1073,7 @@ window.addEventListener('online', () => syncAll());
 window.addEventListener('beforeunload', () => saveLocal());
 
 /* ---------- Старт ---------- */
+if (typeof BG_FX !== 'undefined') BG_FX.init();
 go('home');
 if (ghToken()) syncAll();
 

@@ -333,23 +333,32 @@ function renderSbrRouteSvg(stages, curStageIdx) {
   const curPts = stages.slice(0, curStageIdx + 1).map(s => `${s.x},${s.y}`).join(' ');
   const curSt = stages[curStageIdx];
   return `<svg class="sbr-route-svg" viewBox="0 0 600 165" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Карта гонки Steel Ball Run">
-    <rect width="600" height="165" rx="12" fill="#132238"/>
-    <path d="M22 142 Q120 156 220 135 Q330 148 450 138 Q540 132 582 94 L574 34 Q490 18 395 26 Q280 20 160 36 Q65 44 26 78 Z" fill="#1b3352" stroke="#2c4e75" stroke-width="2"/>
-    <polyline points="${pts}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="5" stroke-dasharray="8 6" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="${curPts}" fill="none" stroke="#f6b93b" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <defs>
+      <linearGradient id="sbrSky" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#0f2038"/><stop offset="55%" stop-color="#1a3358"/><stop offset="100%" stop-color="#122742"/>
+      </linearGradient>
+      <linearGradient id="sbrLine" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#00d2d3"/><stop offset="100%" stop-color="#f6b93b"/>
+      </linearGradient>
+    </defs>
+    <rect width="600" height="165" rx="14" fill="url(#sbrSky)"/>
+    <path d="M22 142 Q120 156 220 135 Q330 148 450 138 Q540 132 582 94 L574 34 Q490 18 395 26 Q280 20 160 36 Q65 44 26 78 Z" fill="#1e3c63" stroke="#355f91" stroke-width="2"/>
+    <polyline points="${pts}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="5" stroke-dasharray="8 6" stroke-linecap="round" stroke-linejoin="round" class="route-dash"/>
+    <polyline points="${curPts}" fill="none" stroke="url(#sbrLine)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
     ${stages.map((st, i) => {
       const isCur = i === curStageIdx;
       const fill = st.cleared ? '#00b894' : isCur ? '#f6b93b' : '#2d4766';
       const stroke = st.cleared ? '#55efc4' : isCur ? '#fff' : '#7f9bb8';
       return `<g class="route-node ${isCur ? 'is-cur' : ''}" data-stage-idx="${i}" style="cursor:pointer">
-        ${isCur ? `<circle cx="${st.x}" cy="${st.y}" r="16" fill="#f6b93b" opacity=".28" class="pulse-ring"/>` : ''}
-        <circle cx="${st.x}" cy="${st.y}" r="${isCur ? 11.5 : 9}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
+        ${isCur ? `<circle cx="${st.x}" cy="${st.y}" r="18" fill="#f6b93b" opacity=".32" class="pulse-ring"/>` : ''}
+        <circle cx="${st.x}" cy="${st.y}" r="${isCur ? 12 : 9}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
         <text x="${st.x}" y="${st.y + 3.8}" text-anchor="middle" font-size="10.5" font-weight="900" fill="${st.cleared || isCur ? '#141a24' : '#d2dae2'}">${st.id}</text>
         <text x="${st.x}" y="${st.y + (st.id === 6 ? -15 : i % 2 ? 25 : -16)}" text-anchor="middle" font-size="11" font-weight="700" fill="${isCur ? '#ffeaa7' : '#d2e3f5'}">${esc(st.short)}</text>
       </g>`;
     }).join('')}
     <g class="horse-marker" transform="translate(${curSt.x} ${curSt.y - 24})">
-      <text x="0" y="0" text-anchor="middle" font-size="20">🐎</text>
+      <circle cx="0" cy="-4" r="11" fill="#f6b93b" opacity=".25"/>
+      <text x="0" y="1" text-anchor="middle" font-size="18">🐎</text>
     </g>
   </svg>`;
 }
@@ -364,22 +373,22 @@ function renderSbrHero(p) {
       <button type="button" class="sbr-portrait tap-hero" id="gyroTap" title="Нажми на Джайро!">
         ${renderGyroSvg('idle', 82)}
       </button>
-      <div style="flex:1;min-width:190px">
-        <div class="world-tag sbr">STEEL BALL RUN · ЭТАП ${curSt.id} ИЗ 9</div>
+      <div style="flex:1;min-width:180px">
+        <div class="world-tag sbr">STEEL BALL RUN · ЭТАП ${curSt.id}/9</div>
         <h2 style="margin:2px 0;color:#fff">${esc(curSt.name)}</h2>
-        <div class="small" style="color:#d2dae2">🌀 Рекорд вращения: <b>x${p.world.spinBest || 0}</b> · ⚔️ Дуэлей выиграно: <b>${p.world.bossWins || 0}</b> · 🏆 Артефакты: <b>${p.world.artifacts.length}/9</b></div>
+        <div class="small" style="color:#d2e3f5">Рекорд Spin <b>×${p.world.spinBest || 0}</b> · Дуэлей <b>${p.world.bossWins || 0}</b> · Трофеи <b>${p.world.artifacts.length}/9</b></div>
       </div>
     </div>
     <div class="sbr-quote" id="sbrQuote">${quote}</div>
     <div class="sbr-route-wrap">${renderSbrRouteSvg(stages, curStageIdx)}</div>
     <div class="sbr-stage-detail small" id="sbrStageInfo">
-      📍 <b>${esc(curSt.name)}</b>: ${curSt.done}/${curSt.total} слов (${curSt.pct}%) · Трофей: <b>${esc(curSt.artifact)}</b> ${curSt.cleared ? '✅ Открыт!' : '— выучи 70% слов юнита'}
+      <b>${esc(curSt.name)}</b> — ${curSt.done}/${curSt.total} слов (${curSt.pct}%) · ${esc(curSt.artifact)} ${curSt.cleared ? '✅' : '(нужно 70%)'}
     </div>
-    <div class="sbr-map">
+    <div class="sbr-map-strip">
       ${stages.map((st, i) => `
         <button type="button" class="sbr-stage ${st.cleared ? 'done' : i === curStageIdx ? 'cur' : ''}" data-stage-idx="${i}">
-          <b>${st.cleared ? '✅' : i === curStageIdx ? '🐎' : '📍'} ${esc(st.name)}</b>
-          <span style="color:#d2dae2">${st.done}/${st.total} слов</span>
+          <b>${st.id}. ${esc(st.short)}</b>
+          <span>${st.done}/${st.total}</span>
           <div class="stbar"><i style="width:${st.pct}%"></i></div>
         </button>`).join('')}
     </div>
@@ -409,7 +418,7 @@ function bindSbrHero(root, p) {
       const st = stages[+node.dataset.stageIdx];
       if (!st || !infoEl) return;
       playPop();
-      infoEl.innerHTML = `📍 <b>${esc(st.name)}</b>: ${st.done}/${st.total} слов (${st.pct}%) · Трофей: <b>${esc(st.artifact)}</b> ${st.cleared ? '✅ Открыт!' : '— нужно 70% слов юнита'}`;
+      infoEl.innerHTML = `<b>${esc(st.name)}</b> — ${st.done}/${st.total} слов (${st.pct}%) · ${esc(st.artifact)} ${st.cleared ? '✅ Открыт!' : '(нужно 70%)'}`;
       infoEl.classList.remove('pop'); void infoEl.offsetWidth; infoEl.classList.add('pop');
     };
   });
@@ -585,36 +594,38 @@ function renderCozyRoomSvg(p) {
 function renderCozyHero(p) {
   const pet = petById(p.world.activePet);
   const caps = p.world.freeCapsules || 0;
-  const timeLabels = { day: '☀️ День', sunset: '🌅 Закат', night: '🌙 Вечер' };
   const curTime = p.world.roomTime || 'day';
+  const timeMeta = {
+    day: `${UI_ICO.sun}<span>День</span>`,
+    sunset: `${UI_ICO.sunset}<span>Закат</span>`,
+    night: `${UI_ICO.moon}<span>Вечер</span>`
+  };
   return `
   <div class="cozy-stage" id="cozyHero">
-    <div class="row" style="margin-bottom:8px">
-      <div class="world-tag cozy">🎀 Уютное кафе Насти</div>
+    <div class="row" style="margin-bottom:8px;gap:6px;flex-wrap:nowrap">
+      <div class="world-tag cozy" style="margin:0">Кафе Насти</div>
       <div class="spacer"></div>
-      <button type="button" class="pill pill-btn" id="toggleRoomTime" title="Сменить атмосферу комнаты">${timeLabels[curTime]}</button>
-      <div class="pill">💎 ${p.world.gems || 0}</div>
-      <div class="pill">🐾 ${p.world.pets.length}/${COZY_PETS.length}</div>
+      <div class="pill stat-pill">${UI_ICO.gem}<span>${p.world.gems || 0}</span></div>
+      <button type="button" class="pill pill-btn" id="toggleRoomTime" title="Сменить атмосферу">${timeMeta[curTime]}</button>
     </div>
-    <div class="room-speech" id="roomSpeech">💬 <b>${esc(pet.name)}:</b> ${esc(pet.phrase)} <span class="muted small">(погладь меня или нажми на мебель!)</span></div>
+    <div class="room-speech" id="roomSpeech"><b>${esc(pet.name)}:</b> ${esc(pet.phrase)}</div>
     <div class="cozy-room-wrap" id="cozyRoomWrap">${renderCozyRoomSvg(p)}</div>
     <div class="cozy-actions">
-      <span class="pet-chip">${renderPetSvg(pet.id, 'idle', 28)} ${esc(pet.name)}</span>
-      <div class="spacer"></div>
-      <button class="btn small" id="openShop">🛋️ Магазин уюта</button>
-      <button class="btn small gold" id="openGacha">🎁 Капсула питомца${caps > 0 ? ` (${caps} бесплатно!)` : ''}</button>
+      <button type="button" class="pill pill-btn pet-treat-btn" id="feedPet">🍓 Покормить</button>
+      <button class="btn small btn-ico" id="openShop">${UI_ICO.shop}<span>Магазин</span></button>
+      <button class="btn small gold btn-ico" id="openGacha">${UI_ICO.gacha}<span>Капсула${caps > 0 ? ` (${caps})` : ''}</span></button>
     </div>
   </div>`;
 }
 
 function spawnRoomHearts(wrap, ems = ['💖', '✨', '🌸']) {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     const el = document.createElement('span');
     el.className = 'room-heart';
     el.textContent = pick(ems);
-    el.style.left = (38 + Math.random() * 24) + '%';
-    el.style.top = (44 + Math.random() * 14) + '%';
-    el.style.animationDelay = (i * 0.08) + 's';
+    el.style.left = (36 + Math.random() * 28) + '%';
+    el.style.top = (42 + Math.random() * 16) + '%';
+    el.style.animationDelay = (i * 0.07) + 's';
     wrap.appendChild(el);
     setTimeout(() => el.remove(), 950);
   }
@@ -627,6 +638,38 @@ function bindCozyRoom(root, p) {
   const wrap = stage.querySelector('#cozyRoomWrap');
   const pet = petById(p.world.activePet);
 
+  const applyRoomMood = mode => {
+    document.body.dataset.roomTime = mode;
+    if (typeof BG_FX !== 'undefined') BG_FX.setMode('nastya', mode);
+  };
+  applyRoomMood(p.world.roomTime || 'day');
+
+  const petHappyReact = (phrase, icons) => {
+    playPop();
+    const anim = wrap && wrap.querySelector('.room-pet-anim');
+    if (anim) {
+      anim.classList.remove('pet-jump-once');
+      void anim.offsetWidth;
+      anim.classList.add('pet-jump-once');
+    }
+    if (wrap) spawnRoomHearts(wrap, icons);
+    if (speech) speech.innerHTML = `<b>${esc(pet.name)}:</b> ${esc(phrase)}`;
+  };
+
+  const feedBtn = stage.querySelector('#feedPet');
+  if (feedBtn) {
+    const treats = [
+      ['Ммм, клубничка! Так вкусно, спасибо! 🍓💖', ['🍓', '💖', '✨']],
+      ['Ням-ням, сладкий моти! Зарядился энергией! 🍡✨', ['🍡', '✨', '🌸']],
+      ['Обожаю бабл-ти! Теперь готовы к новым словам! 🧋💖', ['🧋', '💖', '⭐']]
+    ];
+    feedBtn.onclick = () => {
+      const [txt, icos] = pick(treats);
+      petHappyReact(txt, icos);
+      beep(true, 4);
+    };
+  }
+
   const cycleTime = () => {
     const order = ['day', 'sunset', 'night'];
     const next = order[(order.indexOf(p.world.roomTime || 'day') + 1) % order.length];
@@ -634,20 +677,25 @@ function bindCozyRoom(root, p) {
     p.world.t = Date.now();
     save();
     playPop();
-    const labels = { day: '☀️ День', sunset: '🌅 Закат', night: '🌙 Вечер' };
+    applyRoomMood(next);
+    const meta = {
+      day: `${UI_ICO.sun}<span>День</span>`,
+      sunset: `${UI_ICO.sunset}<span>Закат</span>`,
+      night: `${UI_ICO.moon}<span>Вечер</span>`
+    };
     const btn = stage.querySelector('#toggleRoomTime');
-    if (btn) btn.textContent = labels[next];
+    if (btn) btn.innerHTML = meta[next];
     if (wrap) {
       wrap.innerHTML = renderCozyRoomSvg(p);
       bindRoomSvgEvents();
     }
     if (speech) {
       const lines = {
-        day: 'Солнечное утро в кафе — самое время для новых слов! ☀️',
-        sunset: 'Какой красивый розовый закат за окном! 🌅',
-        night: 'Включили уютный вечерний свет и звёздочки! 🌙✨'
+        day: 'Солнечное утро в кафе — самое время для новых слов!',
+        sunset: 'Какой красивый розовый закат за окном!',
+        night: 'Включили уютный вечерний свет и звёздочки!'
       };
-      speech.innerHTML = `💬 <b>${esc(pet.name)}:</b> ${lines[next]}`;
+      speech.innerHTML = `<b>${esc(pet.name)}:</b> ${lines[next]}`;
     }
   };
 
@@ -658,17 +706,7 @@ function bindCozyRoom(root, p) {
     if (!wrap) return;
     const petHit = wrap.querySelector('[data-pet-tap]');
     if (petHit) {
-      petHit.onclick = () => {
-        playPop();
-        const anim = petHit.querySelector('.room-pet-anim');
-        if (anim) {
-          anim.classList.remove('pet-jump-once');
-          void anim.offsetWidth;
-          anim.classList.add('pet-jump-once');
-        }
-        spawnRoomHearts(wrap);
-        if (speech) speech.innerHTML = `💬 <b>${esc(pet.name)}:</b> ${esc(pick(PET_TAP_PHRASES))}`;
-      };
+      petHit.onclick = () => petHappyReact(pick(PET_TAP_PHRASES), ['💖', '✨', '🌸']);
     }
     wrap.querySelectorAll('[data-room-item]').forEach(el => {
       el.onclick = () => {
@@ -677,7 +715,7 @@ function bindCozyRoom(root, p) {
         playPop();
         el.classList.remove('item-boing'); void el.offsetWidth; el.classList.add('item-boing');
         const it = COZY_ITEMS.find(x => x.id === id);
-        if (it && speech) speech.innerHTML = `💬 <b>${esc(pet.name)}:</b> ${esc(it.tip)}`;
+        if (it && speech) speech.innerHTML = `<b>${esc(pet.name)}:</b> ${esc(it.tip)}`;
         spawnRoomHearts(wrap, ['✨', it ? it.em : '💖']);
       };
     });

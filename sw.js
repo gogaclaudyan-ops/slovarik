@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'slovarik-v2.0.2';
+const CACHE_NAME = 'slovarik-v2.0.3';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './config.js',
   './data.js',
   './core.js',
+  './fx.js',
   './worlds.js',
   './app.js',
   './manifest.json',
