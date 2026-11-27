@@ -11,6 +11,10 @@ function setTheme(pid) {
 
 function go(screen, arg) {
   if ('speechSynthesis' in window) try { speechSynthesis.cancel(); } catch (e) { }
+  if (screen === 'home') {
+    document.querySelectorAll('.confetti').forEach(el => el.remove());
+    const tEl = document.getElementById('toast'); if (tEl) tEl.hidden = true;
+  }
   cur.screen = screen; cur.active = false;
   setTheme(['home', 'parent', 'pin'].includes(screen) ? null : cur.pid);
   const map = {
@@ -26,26 +30,35 @@ function go(screen, arg) {
 function renderHome() {
   const ps = [S.profiles.nastya, S.profiles.andrey];
   app.innerHTML = `
-    <div class="center" style="margin-top:8px">
-      <h1>📚 Словарик-тренажёр <span class="small muted">v${CFG.version}</span></h1>
-      <p class="muted">Выбери свой мир и начинай тренировку</p>
+    <div class="home-header center">
+      <h1>📚 Словарик-тренажёр <span class="ver-badge">v${CFG.version}</span></h1>
+      <p class="muted">Выбери своего героя и отправляйся в приключение!</p>
     </div>
     <div class="profiles">
       ${ps.map(p => {
         const g = goalState(p), st = streak(p);
-        const tag = p.id === 'andrey'
+        const isSbr = p.id === 'andrey';
+        const tag = isSbr
           ? '<div class="world-tag sbr">🐎 Steel Ball Run · Аниме-гонка</div>'
           : '<div class="world-tag cozy">🎀 Уютное кафе и Питомцы</div>';
+        const heroMedallion = isSbr
+          ? `<div class="home-medallion sbr">${renderGyroSvg('idle', 94)}</div>`
+          : `<div class="home-medallion cozy">${renderPetSvg(p.world.activePet, 'idle', 94)}</div>`;
+        const worldStat = isSbr
+          ? `🏆 Артефакты: <b>${(p.world.artifacts || []).length}/9</b> · 🌀 Spin ×<b>${p.world.spinBest || 0}</b>`
+          : `💎 <b>${p.world.gems || 0}</b> · 🐾 Питомцев: <b>${(p.world.pets || []).length}/${COZY_PETS.length}</b>`;
         return `<div class="card profile ${p.id}" data-p="${p.id}">
-          <div class="ava">${p.avatar}</div>
+          ${heroMedallion}
           <h2>${p.name}</h2>
           ${tag}
           <div class="muted small">${p.grade} класс · Уровень ${level(p.xp)}</div>
+          <div class="small home-world-stat">${worldStat}</div>
           <div style="margin:12px 0">
             <div class="bar ${g.done ? 'okc' : ''}"><i style="width:${g.pct}%"></i></div>
             <div class="small muted" style="margin-top:6px">Сегодня: ${g.min} мин из ${p.set.goalMin} · 🔥 ${st} ${plural(st, 'день', 'дня', 'дней')}</div>
           </div>
           <div class="small muted">Выучено слов: <b>${learnedCount(p)}</b></div>
+          <div class="home-cta">${isSbr ? 'Погнали в заезд →' : 'Зайти в кафе →'}</div>
         </div>`;
       }).join('')}
     </div>
@@ -53,6 +66,7 @@ function renderHome() {
       <button class="btn ghost" id="toParent">🔐 Для родителей</button>
     </div>`;
   app.querySelectorAll('[data-p]').forEach(el => el.onclick = () => {
+    playPop();
     const pid = el.dataset.p;
     if (KID_PIN[pid]) { cur.pid = pid; go('pin', { target: 'kid', pid }); return; }
     cur.pid = pid; go('kid');
@@ -81,13 +95,14 @@ function renderKid() {
       <span class="pill">🔥 ${st}</span>
       <span class="pill">⭐ ${p.xp}</span>
       ${!isSbr ? `<span class="pill">💎 ${p.world.gems || 0}</span>` : ''}
+      <button class="icon-btn sound-btn" id="sndBtn" title="Включить или выключить звуки">${isSoundOn() ? '🔊' : '🔇'}</button>
     </div>
 
     ${isSbr ? renderSbrHero(p) : renderCozyHero(p)}
 
-    <div class="card">
+    <div class="card goal-card">
       <div class="goal">
-        <div class="ring" style="--p:${g.pct}"><div>${g.pct}%<small>цель дня</small></div></div>
+        <div class="ring ${g.done ? 'ring-done' : ''}" style="--p:${g.pct}"><div>${g.pct}%<small>цель дня</small></div></div>
         <div style="flex:1;min-width:200px">
           <h3>${g.done ? '🎉 Цель дня выполнена!' : 'План на сегодня'}</h3>
           <div class="small muted">Время: <b>${g.min}</b> из ${p.set.goalMin} мин · Тренировок: <b>${g.ses}</b> из ${p.set.goalSessions}</div>
@@ -95,6 +110,7 @@ function renderKid() {
           <div class="bar" style="margin-top:4px"><i style="width:${xpPct}%"></i></div>
         </div>
       </div>
+      ${renderDailyQuests(p)}
     </div>
 
     <div class="section-title">Английский язык (${p.grade} класс)</div>
@@ -121,6 +137,11 @@ function renderKid() {
     </div>`;
 
   document.getElementById('back').onclick = () => { cur.pid = null; go('home'); };
+  document.getElementById('sndBtn').onclick = e => {
+    const on = toggleSound();
+    e.currentTarget.textContent = on ? '🔊' : '🔇';
+    toast(on ? '🔊 Звуки включены' : '🔇 Звуки выключены', 1500);
+  };
   document.getElementById('tEn').onclick = () => startSession('en', 'mix');
   document.getElementById('tEnNew').onclick = () => startSession('en', 'new');
   document.getElementById('tEnRev').onclick = () => startSession('en', 'rev');
@@ -136,6 +157,8 @@ function renderKid() {
   if (shopBtn) shopBtn.onclick = () => go('shop');
   const gachaBtn = document.getElementById('openGacha');
   if (gachaBtn) gachaBtn.onclick = () => go('gacha');
+  if (isSbr) bindSbrHero(app, p);
+  else bindCozyRoom(app, p);
 }
 
 /* ---------- Настя: Магазин уюта ---------- */
@@ -148,7 +171,10 @@ function renderCozyShop() {
       <div class="spacer"></div>
       <span class="pill">💎 ${p.world.gems || 0}</span>
     </div>
-    <div class="cozy-stage">${renderCozyRoomSvg(p)}</div>
+    <div class="cozy-stage" id="cozyHero">
+      <div class="room-speech" id="roomSpeech">✨ Украшай своё кафе — нажми на предметы в комнате, чтобы проверить их!</div>
+      <div class="cozy-room-wrap" id="cozyRoomWrap">${renderCozyRoomSvg(p)}</div>
+    </div>
     <div class="shop-grid">
       ${COZY_ITEMS.map(it => {
         const owned = (p.world.room || []).includes(it.id);
@@ -164,6 +190,7 @@ function renderCozyShop() {
       }).join('')}
     </div>`;
   document.getElementById('back').onclick = () => go('kid');
+  bindCozyRoom(app, p);
   app.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => {
     const it = COZY_ITEMS.find(x => x.id === b.dataset.buy);
     if (!it) return;
@@ -178,10 +205,30 @@ function renderCozyShop() {
 }
 
 /* ---------- Настя: Волшебные капсулы с питомцами ---------- */
-function renderGacha() {
+function renderGacha(revealed) {
   const p = P();
   const caps = p.world.freeCapsules || 0;
   const cost = 120;
+  const stageHtml = revealed
+    ? `<div class="gacha-reveal pop">
+        <div class="reveal-rays ${revealed.pet.rarity}">${renderPetSvg(revealed.pet.id, 'excited', 124)}</div>
+        <span class="rarity ${revealed.pet.rarity}">${RARITY_RU[revealed.pet.rarity]}</span>
+        <h2 style="margin:6px 0">${revealed.isNewPet ? '🎉 Новый питомец!' : '✨ Звёздная повторка!'}</h2>
+        <div style="font-weight:800;font-size:1.15rem;margin-bottom:4px">${esc(revealed.pet.name)}</div>
+        <p class="muted small">${revealed.isNewPet ? esc(revealed.pet.phrase) : 'Повторный питомец подарил тебе +50 💎!'}</p>
+        <div style="margin-top:12px">
+          <button class="btn ok" id="claimPet">💖 Супер! Взять с собой</button>
+        </div>
+      </div>`
+    : `<div class="gacha-egg" id="gachaEgg">🥚✨</div>
+      <h2>Открой капсулу с питомцем!</h2>
+      <p class="muted small">Бесплатные капсулы даются за выполнение цели дня и идеальные тренировки</p>
+      <div style="margin-top:14px">
+        ${caps > 0
+          ? `<button class="btn gold" id="openNow">🎁 Открыть бесплатную капсулу (${caps})</button>`
+          : `<button class="btn" id="openNow">💎 Открыть за ${cost} кристаллов</button>`}
+      </div>`;
+
   app.innerHTML = `
     <div class="topbar">
       <button class="icon-btn" id="back">⬅️</button>
@@ -189,23 +236,14 @@ function renderGacha() {
       <div class="spacer"></div>
       <span class="pill">💎 ${p.world.gems || 0}</span>
     </div>
-    <div class="gacha-box" id="gachaStage">
-      <div class="gacha-egg">🥚✨</div>
-      <h2>Открой капсулу с питомцем!</h2>
-      <p class="muted small">Бесплатные капсулы даются за выполнение цели дня и идеальные тренировки</p>
-      <div style="margin-top:14px">
-        ${caps > 0
-          ? `<button class="btn gold" id="openNow">🎁 Открыть бесплатную капсулу (${caps})</button>`
-          : `<button class="btn" id="openNow">💎 Открыть за ${cost} кристаллов</button>`}
-      </div>
-    </div>
+    <div class="gacha-box" id="gachaStage">${stageHtml}</div>
     <h3>Твои питомцы (${p.world.pets.length}/${COZY_PETS.length}) — нажми, чтобы взять на тренировку:</h3>
     <div class="shop-grid">
       ${COZY_PETS.map(pet => {
         const has = p.world.pets.includes(pet.id);
         const active = p.world.activePet === pet.id;
-        return `<div class="shop-item ${active ? 'owned' : ''}" style="${has ? 'cursor:pointer' : 'opacity:.45;filter:grayscale(1)'}" data-pet="${has ? pet.id : ''}">
-          <div class="em">${pet.em}</div>
+        return `<div class="shop-item pet-card ${active ? 'owned' : ''}" style="${has ? 'cursor:pointer' : 'opacity:.48;filter:grayscale(1)'}" data-pet="${has ? pet.id : ''}">
+          <div class="pet-card-svg">${renderPetSvg(pet.id, active ? 'happy' : 'idle', 70)}</div>
           <b>${esc(pet.name)}</b><br>
           <span class="rarity ${pet.rarity}">${RARITY_RU[pet.rarity]}</span>
           <div class="small muted">${active ? '💖 Сейчас с тобой' : has ? 'Нажми, чтобы выбрать' : 'Ещё в капсуле'}</div>
@@ -213,18 +251,34 @@ function renderGacha() {
       }).join('')}
     </div>`;
   document.getElementById('back').onclick = () => go('kid');
-  document.getElementById('openNow').onclick = () => {
-    if (caps > 0) p.world.freeCapsules--;
-    else if ((p.world.gems || 0) >= cost) p.world.gems -= cost;
-    else { toast('Не хватает 💎! Выполни тренировку или цель дня.'); return; }
-    const { pet, isNewPet } = rollGachaPet(p);
-    confetti(36); playFanfare();
-    toast(isNewPet ? `🎉 Ура! Выпал новый питомец: ${pet.name}!` : `✨ Повторка ${pet.name} — возвращаем +50 💎!`, 3400);
-    renderGacha();
-  };
+  const claimBtn = document.getElementById('claimPet');
+  if (claimBtn) claimBtn.onclick = () => { playPop(); renderGacha(); };
+  const openBtn = document.getElementById('openNow');
+  if (openBtn) {
+    let opening = false;
+    openBtn.onclick = () => {
+      if (opening) return;
+      if (caps > 0) p.world.freeCapsules--;
+      else if ((p.world.gems || 0) >= cost) p.world.gems -= cost;
+      else { toast('Не хватает 💎! Выполни тренировку или цель дня.'); return; }
+      opening = true;
+      openBtn.disabled = true;
+      const egg = document.getElementById('gachaEgg');
+      if (egg) egg.classList.add('gacha-shaking');
+      playGachaCrack();
+      const res = rollGachaPet(p);
+      setTimeout(() => {
+        if (cur.screen !== 'gacha') return;
+        confetti(40); playFanfare();
+        toast(res.isNewPet ? `🎉 Ура! Выпал новый питомец: ${res.pet.name}!` : `✨ Повторка ${res.pet.name} — возвращаем +50 💎!`, 3400);
+        renderGacha(res);
+      }, 650);
+    };
+  }
   app.querySelectorAll('[data-pet]').forEach(el => {
     if (!el.dataset.pet) return;
     el.onclick = () => {
+      playPop();
       p.world.activePet = el.dataset.pet;
       p.world.t = Date.now();
       save();
@@ -324,8 +378,8 @@ function renderTask() {
   const t = ses.tasks[ses.i], p = P();
   const pct = Math.round(ses.i / ses.tasks.length * 100);
   const hud = p.id === 'andrey'
-    ? (ses.boss ? renderBossHud(ses.bossHp, ses.bossMaxHp) : renderSpinHud(ses.combo))
-    : renderPetCheer(p);
+    ? (ses.boss ? renderBossHud(ses.bossHp, ses.bossMaxHp, 'idle') : renderSpinHud(ses.combo, 'idle'))
+    : renderPetCheer(p, null, 'idle', ses.combo);
 
   app.innerHTML = `<div class="ex">
     <div class="progress">
@@ -333,7 +387,7 @@ function renderTask() {
       <div class="bar"><i style="width:${pct}%"></i></div>
       <span class="small muted">${ses.i + 1}/${ses.tasks.length}</span>
     </div>
-    ${hud}
+    <div id="heroHudWrap">${hud}</div>
     <div class="card prompt pop" id="stage"></div>
     <div id="fb"></div>
   </div>`;
@@ -350,20 +404,25 @@ function grade(t, ok, userAns, rightText) {
   const p = P(), c = touch(card(p, t.it.id)), r = dayRec(p);
   const dt = Math.min(30000, Date.now() - (ses.qStart || Date.now()));
   ses.respTimes.push(dt);
+  let gain = 0, gGain = 0;
   if (t.type !== 'learn' && t.type !== 'ru_learn') {
     if (ok) {
       ses.ok++; ses.combo++;
       if (ses.combo > ses.comboMax) ses.comboMax = ses.combo;
       const mult = p.id === 'andrey' ? (ses.combo >= 5 ? 5 : ses.combo >= 3 ? 3 : ses.combo >= 2 ? 2 : 1) : 1;
-      const gain = (t.retry ? 5 : 10) + (mult > 1 ? mult * 2 : 0);
+      gain = (t.retry ? 5 : 10) + (mult > 1 ? mult * 2 : 0);
       ses.xp += gain; p.xp += gain;
       if (p.id === 'andrey') {
         if (ses.combo > (p.world.spinBest || 0)) p.world.spinBest = ses.combo;
         if (ses.boss && ses.bossHp > 0) ses.bossHp--;
         if (ses.combo >= 2) showSfx(SBR_SFX[Math.min(SBR_SFX.length - 1, ses.combo - 2)]);
+        if (ses.boss) { playHit(); floatReward('💥 -1 HP!', 'hit'); }
+        else { beep(true, ses.combo); floatReward(`+${gain} ⭐`, 'xp'); }
       } else {
-        const gGain = ses.combo >= 3 ? 12 : 8;
+        gGain = ses.combo >= 3 ? 12 : 8;
         ses.gems += gGain; p.world.gems = (p.world.gems || 0) + gGain;
+        beep(true, ses.combo);
+        floatReward(`+${gGain} 💎`, 'gem');
       }
       p.world.t = Date.now();
       r.ok++;
@@ -372,7 +431,6 @@ function grade(t, ok, userAns, rightText) {
         c.b = Math.min(MAX_BOX, c.b + 1); c.ok++;
         c.due = addDays(today(), INTERVALS[c.b]);
       }
-      beep(true);
     } else {
       ses.bad++; ses.combo = 0; r.bad++;
       r.errs[t.it.id] = (r.errs[t.it.id] || 0) + 1;
@@ -386,6 +444,21 @@ function grade(t, ok, userAns, rightText) {
       beep(false);
     }
     save();
+    const hudWrap = document.getElementById('heroHudWrap');
+    if (hudWrap) {
+      if (p.id === 'andrey') {
+        hudWrap.innerHTML = ses.boss
+          ? renderBossHud(ses.bossHp, ses.bossMaxHp, ok ? 'hit' : 'taunt')
+          : renderSpinHud(ses.combo, ok ? (ses.combo >= 2 ? 'excited' : 'happy') : 'cheer');
+      } else {
+        hudWrap.innerHTML = renderPetCheer(
+          p,
+          ok ? pick(PET_HAPPY_PHRASES) : pick(PET_CHEER_PHRASES),
+          ok ? (ses.combo >= 3 ? 'excited' : 'happy') : 'cheer',
+          ses.combo
+        );
+      }
+    }
   }
   const PRAISE = p.id === 'andrey'
     ? ['Золотое вращение!', 'Точно в цель!', 'Отличный рывок!', 'Чистая победа!']
@@ -714,20 +787,21 @@ function startPairs() {
     ...words.map(w => ({ id: w.id, text: w.en, kind: 'en' })),
     ...words.map(w => ({ id: w.id, text: w.ru, kind: 'ru' }))
   ]);
-  let open = [], done = new Set(), moves = 0, t0 = Date.now();
+  let open = [], done = new Set(), moves = 0, streakPairs = 0, t0 = Date.now();
   cur.active = true;
   function draw() {
     app.innerHTML = `<div class="ex">
       <div class="topbar"><button class="icon-btn" id="back">⬅️</button><div class="title">🃏 Найди пары</div><div class="spacer"></div><span class="pill">Ходов: ${moves}</span></div>
       <div class="pairs">${cards.map((c, i) => {
         const isD = done.has(c.id), isO = open.includes(i);
-        return `<button class="pc ${isD ? 'done' : isO ? 'open' : ''}" data-i="${i}">${isD || isO ? esc(c.text) : '?'}</button>`;
+        return `<button class="pc ${isD ? 'done' : isO ? 'open flip-in' : ''}" data-i="${i}">${isD || isO ? esc(c.text) : '?'}</button>`;
       }).join('')}</div>
     </div>`;
     document.getElementById('back').onclick = () => go('kid');
     app.querySelectorAll('.pc').forEach(b => b.onclick = () => {
       const i = +b.dataset.i;
       if (done.has(cards[i].id) || open.includes(i) || open.length === 2) return;
+      playPop();
       open.push(i);
       if (cards[i].kind === 'en') speak(cards[i].text, 'en');
       draw();
@@ -735,16 +809,19 @@ function startPairs() {
         moves++;
         const [a, b2] = open;
         if (cards[a].id === cards[b2].id) {
-          done.add(cards[a].id); open = []; beep(true);
+          streakPairs++;
+          done.add(cards[a].id); open = []; beep(true, streakPairs);
+          floatReward(streakPairs >= 2 ? `✨ Пара ×${streakPairs}!` : '✨ Пара!', 'gem');
           if (done.size === words.length) {
             const sec = Math.round((Date.now() - t0) / 1000);
             dayRec(p).games++; p.xp += 30;
             if (p.id === 'nastya') { p.world.gems = (p.world.gems || 0) + 35; p.world.t = Date.now(); }
-            save(); checkAch({ pairsFast: sec < 60 }); confetti(25);
+            save(); checkAch({ pairsFast: sec < 60 }); confetti(25); playFanfare();
             toast(`🎉 Все пары найдены за ${sec} сек! +30 ⭐`, 3200);
             setTimeout(() => go('kid'), 1600);
           } else draw();
         } else {
+          streakPairs = 0;
           beep(false);
           setTimeout(() => { open = []; draw(); }, 700);
         }
@@ -757,14 +834,15 @@ function startPairs() {
 function startBlitz() {
   const p = P(), deck = enDeck(p);
   if (deck.length < 4) { toast('Мало слов в теме'); return; }
-  let left = 60, score = 0, timer = null;
+  let left = 60, score = 0, bCombo = 0, timer = null;
   cur.active = true;
   function nextQ() {
     if (left <= 0) return;
     const w = pick(deck), opts = shuffle([w, ...shuffle(deck.filter(x => x.id !== w.id && x.ru !== w.ru)).slice(0, 3)]);
     app.innerHTML = `<div class="ex">
-      <div class="topbar"><button class="icon-btn" id="back">⬅️</button><div class="title">⚡ Блиц 60 сек</div><div class="spacer"></div><span class="pill timer" id="tm">⏱ ${left}</span><span class="pill">⭐ ${score}</span></div>
+      <div class="topbar"><button class="icon-btn" id="back">⬅️</button><div class="title">⚡ Блиц 60 сек</div><div class="spacer"></div><span class="pill timer ${left <= 10 ? 'urgent' : ''}" id="tm">⏱ ${left}</span><span class="pill">⭐ ${score}</span></div>
       <div class="card center pop">
+        ${bCombo >= 3 ? `<div class="combo-chip" style="margin-bottom:6px">🔥 Серия ×${bCombo}</div>` : ''}
         <div class="blitz-q">${esc(w.en)}</div>
         <div class="opts">${opts.map((o, i) => `<button class="opt" data-i="${i}">${esc(o.ru)}</button>`).join('')}</div>
       </div>
@@ -772,19 +850,30 @@ function startBlitz() {
     document.getElementById('back').onclick = () => { clearInterval(timer); go('kid'); };
     app.querySelectorAll('.opt').forEach(b => b.onclick = () => {
       const ok = opts[+b.dataset.i].id === w.id;
-      if (ok) { score++; beep(true); } else { beep(false); }
+      if (ok) {
+        score++; bCombo++;
+        beep(true, bCombo);
+        floatReward(bCombo >= 3 ? `🔥 ×${bCombo}` : '+1 ⚡', 'xp');
+      } else {
+        bCombo = 0;
+        beep(false);
+      }
       nextQ();
     });
   }
   timer = setInterval(() => {
     left--;
-    const tEl = document.getElementById('tm'); if (tEl) tEl.textContent = '⏱ ' + left;
+    const tEl = document.getElementById('tm');
+    if (tEl) {
+      tEl.textContent = '⏱ ' + left;
+      if (left <= 10) tEl.classList.add('urgent');
+    }
     if (left <= 0) {
       clearInterval(timer);
       dayRec(p).games++; p.xp += score * 2;
       if (p.id === 'nastya') { p.world.gems = (p.world.gems || 0) + score * 2; p.world.t = Date.now(); }
       if (score > (p.bestBlitz || 0)) p.bestBlitz = score;
-      save(); checkAch({ blitz: score }); confetti(25);
+      save(); checkAch({ blitz: score }); confetti(25); playFanfare();
       app.innerHTML = `<div class="ex card center pop">
         <h1>⚡ Блиц окончен!</h1>
         <p style="font-size:1.5rem">Счёт: <b>${score}</b> · Рекорд: <b>${p.bestBlitz}</b></p>
@@ -821,7 +910,7 @@ function renderAwards() {
     ? `<div class="card" style="margin-bottom:14px"><h3>🏆 Артефакты Steel Ball Run (${p.world.artifacts.length}/9)</h3>
         <div class="row">${p.world.artifacts.length ? p.world.artifacts.map(a => `<span class="pill">${esc(a)}</span>`).join('') : '<span class="muted small">Пройди этапы гонки (от 70% слов юнита), чтобы открыть артефакты!</span>'}</div></div>`
     : `<div class="card" style="margin-bottom:14px"><h3>🐾 Коллекция питомцев (${p.world.pets.length}/${COZY_PETS.length})</h3>
-        <div class="row">${p.world.pets.map(id => { const pet = petById(id); return `<span class="pill">${pet.em} ${esc(pet.name)}</span>`; }).join('')}</div></div>`;
+        <div class="row">${p.world.pets.map(id => { const pet = petById(id); return `<span class="pill pet-award-pill">${renderPetSvg(pet.id, 'idle', 26)} ${esc(pet.name)}</span>`; }).join('')}</div></div>`;
   app.innerHTML = `
     <div class="topbar"><button class="icon-btn" id="back">⬅️</button><div class="title">${p.id === 'andrey' ? '🏆 Трофеи и награды' : '🎀 Альбом наклеек'}</div></div>
     ${extra}

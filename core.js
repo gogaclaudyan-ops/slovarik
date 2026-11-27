@@ -9,7 +9,7 @@
    ========================================================================= */
 
 const CFG = window.APP_CONFIG || {
-  version: '2.0.1', schemaVersion: 2,
+  version: '2.0.2', schemaVersion: 2,
   gh: { owner: 'gogaclaudyan-ops', repo: 'slovarik-data', branch: 'main' },
   webUrl: 'https://gogaclaudyan-ops.github.io/slovarik/',
   parentPin: '8345', kidPin: { nastya: '9999' }
@@ -372,36 +372,105 @@ function speak(text, lang = 'en', rate) {
 const SR = (AB && (() => { try { return AB.canListen(); } catch (e) { return false; } })()) ? 'android' : (window.SpeechRecognition || window.webkitSpeechRecognition);
 
 let actx = null;
-function beep(good) {
+const SFX_KEY = 'slovarik_sfx';
+function isSoundOn() {
+  try { return localStorage.getItem(SFX_KEY) !== '0'; } catch (e) { return true; }
+}
+function toggleSound() {
+  const next = !isSoundOn();
+  try { localStorage.setItem(SFX_KEY, next ? '1' : '0'); } catch (e) { }
+  if (next) playPop();
+  return next;
+}
+function getAudioCtx() {
+  if (!isSoundOn()) return null;
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    const notes = good ? [660, 880] : [300, 220];
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+
+function beep(good, combo = 1) {
+  const ctx = getAudioCtx(); if (!ctx) return;
+  try {
+    const scale = [523.25, 587.33, 659.25, 783.99, 880, 1046.5];
+    const base = scale[Math.min(scale.length - 1, Math.max(0, (combo || 1) - 1))];
+    const notes = good ? [base, base * 1.25] : [310, 230];
     notes.forEach((f, i) => {
-      const o = actx.createOscillator(), g = actx.createGain();
+      const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = good ? 'sine' : 'triangle';
       o.frequency.value = f;
-      g.gain.setValueAtTime(.0001, actx.currentTime + i * .1);
-      g.gain.exponentialRampToValueAtTime(.16, actx.currentTime + i * .1 + .02);
-      g.gain.exponentialRampToValueAtTime(.0001, actx.currentTime + i * .1 + .18);
-      o.connect(g).connect(actx.destination);
-      o.start(actx.currentTime + i * .1);
-      o.stop(actx.currentTime + i * .1 + .2);
+      g.gain.setValueAtTime(.0001, ctx.currentTime + i * .085);
+      g.gain.exponentialRampToValueAtTime(.16, ctx.currentTime + i * .085 + .02);
+      g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + i * .085 + .18);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + i * .085);
+      o.stop(ctx.currentTime + i * .085 + .2);
+    });
+  } catch (e) { }
+}
+
+function playPop() {
+  const ctx = getAudioCtx(); if (!ctx) return;
+  try {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(420, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(760, ctx.currentTime + .08);
+    g.gain.setValueAtTime(.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.14, ctx.currentTime + .015);
+    g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .1);
+    o.connect(g).connect(ctx.destination);
+    o.start(ctx.currentTime);
+    o.stop(ctx.currentTime + .11);
+  } catch (e) { }
+}
+
+function playHit() {
+  const ctx = getAudioCtx(); if (!ctx) return;
+  try {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(220, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + .14);
+    g.gain.setValueAtTime(.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.2, ctx.currentTime + .012);
+    g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .16);
+    o.connect(g).connect(ctx.destination);
+    o.start(ctx.currentTime);
+    o.stop(ctx.currentTime + .17);
+  } catch (e) { }
+}
+
+function playGachaCrack() {
+  const ctx = getAudioCtx(); if (!ctx) return;
+  try {
+    [440, 554.37, 659.25, 880, 1108.73, 1318.5].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, ctx.currentTime + i * .07);
+      g.gain.exponentialRampToValueAtTime(.16, ctx.currentTime + i * .07 + .018);
+      g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + i * .07 + .24);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + i * .07);
+      o.stop(ctx.currentTime + i * .07 + .25);
     });
   } catch (e) { }
 }
 
 function playFanfare() {
+  const ctx = getAudioCtx(); if (!ctx) return;
   try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     [523, 659, 784, 1046].forEach((f, i) => {
-      const o = actx.createOscillator(), g = actx.createGain();
+      const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = 'triangle'; o.frequency.value = f;
-      g.gain.setValueAtTime(.0001, actx.currentTime + i * .09);
-      g.gain.exponentialRampToValueAtTime(.18, actx.currentTime + i * .09 + .02);
-      g.gain.exponentialRampToValueAtTime(.0001, actx.currentTime + i * .09 + .25);
-      o.connect(g).connect(actx.destination);
-      o.start(actx.currentTime + i * .09);
-      o.stop(actx.currentTime + i * .09 + .26);
+      g.gain.setValueAtTime(.0001, ctx.currentTime + i * .09);
+      g.gain.exponentialRampToValueAtTime(.18, ctx.currentTime + i * .09 + .02);
+      g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + i * .09 + .25);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + i * .09);
+      o.stop(ctx.currentTime + i * .09 + .26);
     });
   } catch (e) { }
 }
@@ -422,6 +491,18 @@ function showSfx(text) {
   el.textContent = text;
   layer.appendChild(el);
   setTimeout(() => el.remove(), 1000);
+}
+
+function floatReward(text, kind = 'xp') {
+  const layer = document.getElementById('sfx-layer');
+  if (!layer) return;
+  const el = document.createElement('div');
+  el.className = `float-reward ${kind}`;
+  el.textContent = text;
+  el.style.left = (42 + Math.random() * 16) + '%';
+  el.style.top = (36 + Math.random() * 10) + '%';
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 950);
 }
 
 function confetti(n = 30) {
